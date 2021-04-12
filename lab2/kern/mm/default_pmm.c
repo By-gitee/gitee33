@@ -61,7 +61,8 @@
  *          while((le=list_next(le)) != &free_list) {
  *          ...
  *      (4.1.1)
- *          In the while loop, get the struct `page` and check if `p->property`
+ *          
+ * the while loop, get the struct `page` and check if `p->property`
  *      (recording the num of free pages in this block) >= n.
  *              struct Page *p = le2page(le, page_link);
  *              if(p->property >= n){ ...
@@ -106,14 +107,15 @@ default_init(void) {
 
 static void
 default_init_memmap(struct Page *base, size_t n) {
-    assert(n > 0);
+    assert(n > 0);  //如果括号内语句错误则程序终止执行
     struct Page *p = base;
-    for (; p != base + n; p ++) {
+    for (; p != base + n; p ++) {  //把所有的页全都初始化
         assert(PageReserved(p));
-        p->flags = p->property = 0;
+        p->flags=0;
+        p->property = 0;
         set_page_ref(p, 0);
     }
-    base->property = n;
+    base->property = n;    //第一个页要存有后面有多少个可用块
     SetPageProperty(base);
     nr_free += n;
     list_add(&free_list, &(base->page_link));
@@ -122,34 +124,37 @@ default_init_memmap(struct Page *base, size_t n) {
 static struct Page *
 default_alloc_pages(size_t n) {
     assert(n > 0);
-    if (n > nr_free) {
+    if (n > nr_free) {   //保证请求合理
         return NULL;
     }
     struct Page *page = NULL;
     list_entry_t *le = &free_list;
     while ((le = list_next(le)) != &free_list) {
         struct Page *p = le2page(le, page_link);
-        if (p->property >= n) {
+        if (p->property >= n) {         //找到可用块了，赋给page并进行相应设置
             page = p;
+            SetPageReserved(page);  //PG_reserved=1
             break;
         }
     }
     if (page != NULL) {
         list_del(&(page->page_link));
         if (page->property > n) {
-            struct Page *p = page + n;
-            p->property = page->property - n;
+            struct Page *p = page + n;   //前一部分分出去并且从列表中删除，后一部分保留
+            SetPageProperty(p);
+            p->property = page->property - n;   //开头的page->property减少为的当前可用块数
             list_add(&free_list, &(p->page_link));
     }
-        nr_free -= n;
-        ClearPageProperty(page);
+        list_del(&(page->page_link));  //后删除，不然影响后一部分的操作
+        nr_free -= n;    //可用块总数要减少
+        ClearPageProperty(page);  //PG_property=0
     }
     return page;
 }
 
 static void
-default_free_pages(struct Page *base, size_t n) {
-    assert(n > 0);
+default_free_pages(struct Page *base, size_t n) {//不是很懂这一部分的原理，今天先到这里4.13
+    assert(n > 0);  
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
@@ -162,7 +167,7 @@ default_free_pages(struct Page *base, size_t n) {
     while (le != &free_list) {
         p = le2page(le, page_link);
         le = list_next(le);
-        if (base + base->property == p) {
+        if (base + base->property == p) {//岂不是优先向后合并
             base->property += p->property;
             ClearPageProperty(p);
             list_del(&(p->page_link));
@@ -176,6 +181,12 @@ default_free_pages(struct Page *base, size_t n) {
     }
     nr_free += n;
     list_add(&free_list, &(base->page_link));
+
+    for (; p != base + n; p ++) {
+        assert(!PageReserved(p) && !PageProperty(p));
+        p->flags = 0;
+        set_page_ref(p, 0);
+    }
 }
 
 static size_t
