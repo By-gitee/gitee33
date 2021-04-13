@@ -133,7 +133,7 @@ default_alloc_pages(size_t n) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {         //找到可用块了，赋给page并进行相应设置
             page = p;
-            //SetPageReserved(page);  //PG_reserved=1  reserve的意思？
+            //SetPageReserved(page);  //PG_reserved=1  reserve的意思是指保留，这样set是置0，不是置1
             break;
         }
     }
@@ -153,13 +153,13 @@ default_alloc_pages(size_t n) {
 }
 
 static void
-default_free_pages(struct Page *base, size_t n) {//不是很懂这一部分的原理，今天先到这里4.13
+default_free_pages(struct Page *base, size_t n) {//释放的页重新插入可用列表
     assert(n > 0);  
     struct Page *p = base;
     for (; p != base + n; p ++) {
         assert(!PageReserved(p) && !PageProperty(p));
         p->flags = 0;
-        set_page_ref(p, 0);
+        set_page_ref(p, 0);  //对应位的设置
     }
     base->property = n;
     SetPageProperty(base);
@@ -180,18 +180,25 @@ default_free_pages(struct Page *base, size_t n) {//不是很懂这一部分的�
         }
     }
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
 ///////////找个合适的位置（按地址排列）插入这一大块
     le=list_next(&free_list);
+   
     while(le!=&free_list){
         p = le2page(le, page_link);
-        le = list_next(le);
-        if(base+base->property<=p){
+        if(base+base->property<p){
           //  list_add    //
-          list_add_before(le,&(base->page_link));
+          //之后对照答案看，我没有写这样一句：
+          //assert(base + base->property != p);
+          //base + base->property是不可以等于p的  
+          //不过我用的是小于，虽然意思一样，但是检查下确实是要的
+          list_add_before(le,&(base->page_link)); 
           return;
         }
+        le = list_next(le);
     }
+    //没找到这么一个地址，说明这一大块需要放到最后，边界处理忘记了，过程中的bug
+    list_add_before(le,&(base->page_link)); 
+    
 }
 
 static size_t
@@ -203,7 +210,7 @@ static void
 basic_check(void) {
     struct Page *p0, *p1, *p2;
     p0 = p1 = p2 = NULL;
-    assert((p0 = alloc_page()) != NULL);
+    assert((p0 = alloc_page()) != NULL);    //bug
     assert((p1 = alloc_page()) != NULL);   //bug
     assert((p2 = alloc_page()) != NULL);
 
