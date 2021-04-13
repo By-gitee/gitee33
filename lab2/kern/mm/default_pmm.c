@@ -198,9 +198,13 @@ default_free_pages(struct Page *base, size_t n) {//释放的页重新插入可�
     }
     //没找到这么一个地址，说明这一大块需要放到最后，边界处理忘记了，过程中的bug
     list_add_before(le,&(base->page_link)); 
-    
+    //其实这里可以直接拿出来add的语句放到最后
 }
-
+/*
+*相关问题回答：
+*优化方向：地址是从小到大保存的，而且我们也是从小到大遍历的
+*我们可以通过二叉树搜索更快速的找到所需的地址O（log n）
+*/
 static size_t
 default_nr_free_pages(void) {
     return nr_free;
@@ -210,8 +214,8 @@ static void
 basic_check(void) {
     struct Page *p0, *p1, *p2;
     p0 = p1 = p2 = NULL;
-    assert((p0 = alloc_page()) != NULL);    //bug
-    assert((p1 = alloc_page()) != NULL);   //bug
+    assert((p0 = alloc_page()) != NULL);    
+    assert((p1 = alloc_page()) != NULL);   
     assert((p2 = alloc_page()) != NULL);
 
     assert(p0 != p1 && p0 != p2 && p1 != p2);
