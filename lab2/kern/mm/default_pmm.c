@@ -133,17 +133,17 @@ default_alloc_pages(size_t n) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {         //找到可用块了，赋给page并进行相应设置
             page = p;
-            SetPageReserved(page);  //PG_reserved=1
+            //SetPageReserved(page);  //PG_reserved=1  reserve的意思？
             break;
         }
     }
     if (page != NULL) {
-        list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;   //前一部分分出去并且从列表中删除，后一部分保留
             SetPageProperty(p);
             p->property = page->property - n;   //开头的page->property减少为的当前可用块数
-            list_add(&free_list, &(p->page_link));
+            list_add(&(page->page_link),&(p->page_link));
+            //list_add(&free_list, &(p->page_link));
     }
         list_del(&(page->page_link));  //后删除，不然影响后一部分的操作
         nr_free -= n;    //可用块总数要减少
@@ -170,7 +170,7 @@ default_free_pages(struct Page *base, size_t n) {//不是很懂这一部分的�
         if (base + base->property == p) {//岂不是优先向后合并
             base->property += p->property;
             ClearPageProperty(p);
-            list_del(&(p->page_link));
+            list_del(&(p->page_link));   //删除链表中被合并的块
         }
         else if (p + p->property == base) {
             p->property += base->property;
@@ -181,11 +181,16 @@ default_free_pages(struct Page *base, size_t n) {//不是很懂这一部分的�
     }
     nr_free += n;
     list_add(&free_list, &(base->page_link));
-
-    for (; p != base + n; p ++) {
-        assert(!PageReserved(p) && !PageProperty(p));
-        p->flags = 0;
-        set_page_ref(p, 0);
+///////////找个合适的位置（按地址排列）插入这一大块
+    le=list_next(&free_list);
+    while(le!=&free_list){
+        p = le2page(le, page_link);
+        le = list_next(le);
+        if(base+base->property<=p){
+          //  list_add    //
+          list_add_before(le,&(base->page_link));
+          return;
+        }
     }
 }
 
@@ -199,7 +204,7 @@ basic_check(void) {
     struct Page *p0, *p1, *p2;
     p0 = p1 = p2 = NULL;
     assert((p0 = alloc_page()) != NULL);
-    assert((p1 = alloc_page()) != NULL);
+    assert((p1 = alloc_page()) != NULL);   //bug
     assert((p2 = alloc_page()) != NULL);
 
     assert(p0 != p1 && p0 != p2 && p1 != p2);
