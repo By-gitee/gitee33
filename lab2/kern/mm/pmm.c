@@ -349,26 +349,27 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
      */
 
     pde_t *pdep = pgdir+PDX(la);   // (1) find page directory entry
-    if (((*pdep)&PTE_P)==0) {            // (2) check if entry is not present
+    if (((*pdep)&PTE_P)==0) {    
+         // (2) check if entry is not present
         if(create==0){
-            return NULL;            /////////////////////////////////我没搞明白阿阿阿阿阿！！！！！
+            return NULL;          
         }
-        struct Page* newPage=alloc_page();                  // (3) check if creating is needed, then alloc page for page table
-        
+        struct Page* newPage=alloc_page();// (3) check if creating is needed, then alloc page for page table
+        if(newPage==NULL){
+            return NULL;
+        }          
                           // CAUTION: this page is used for page table, not for common data page
                           // (4) set page reference
         set_page_ref(newPage,1);
                           // (5) get linear address of page
         uintptr_t pa = page2pa(newPage); 
+        cprintf("4\n");
                           // (6) clear page content using memset
-        memset(pa,0,0x1000);
+        memset(KADDR(pa),0,0x1000);
                           // (7) set page directory entry's permission
-        *pdep=pa|PTE_P|PTE_U|PTE_W;  
-        pde_t* page_entry=KADDR(pa);
-        return page_entry;
+        *pdep= (pa&(~0xfff))|PTE_P|PTE_W|PTE_U;
     }
-
-    return pdep;          // (8) return page table entry
+        return (pte_t*)KADDR((*pdep)&~0xfff)+PTX(la);//返回对应表项
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
@@ -471,22 +472,22 @@ check_alloc_page(void) {
 
 static void
 check_pgdir(void) {
+    cprintf("6\n");
     assert(npage <= KMEMSIZE / PGSIZE);
     assert(boot_pgdir != NULL && (uint32_t)PGOFF(boot_pgdir) == 0);
     assert(get_page(boot_pgdir, 0x0, NULL) == NULL);
 
+cprintf("7\n");
     struct Page *p1, *p2;
     p1 = alloc_page();
     assert(page_insert(boot_pgdir, p1, 0x0, 0) == 0);
-
+cprintf("8\n");
     pte_t *ptep;
     assert((ptep = get_pte(boot_pgdir, 0x0, 0)) != NULL);
     assert(pte2page(*ptep) == p1);
     assert(page_ref(p1) == 1);
-
     ptep = &((pte_t *)KADDR(PDE_ADDR(boot_pgdir[0])))[1];
     assert(get_pte(boot_pgdir, PGSIZE, 0) == ptep);
-
     p2 = alloc_page();
     assert(page_insert(boot_pgdir, p2, PGSIZE, PTE_U | PTE_W) == 0);
     assert((ptep = get_pte(boot_pgdir, PGSIZE, 0)) != NULL);
