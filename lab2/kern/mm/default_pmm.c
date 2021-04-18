@@ -133,7 +133,7 @@ default_alloc_pages(size_t n) {
         struct Page *p = le2page(le, page_link);
         if (p->property >= n) {         //找到可用块了，赋给page并进行相应设置
             page = p;
-            //SetPageReserved(page);  //PG_reserved=1  reserve的意思是指保留，这样set是置0，不是置1
+            //SetPageReserved(page);  //PG_reserved=1  reserve的意思是指保留
             break;
         }
     }
@@ -147,7 +147,7 @@ default_alloc_pages(size_t n) {
     }
         list_del(&(page->page_link));  //后删除，不然影响后一部分的操作
         nr_free -= n;    //可用块总数要减少
-        ClearPageProperty(page);  //PG_property=0
+        ClearPageProperty(page);  //PG_property=1 page->property=0
     }
     return page;
 }
