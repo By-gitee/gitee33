@@ -363,7 +363,6 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
         set_page_ref(newPage,1);   //设置该页被引用过一次
                           // (5) get linear address of page
         uintptr_t pa = page2pa(newPage); //获取当前页的物理地址
-        cprintf("4\n");
                           // (6) clear page content using memset
         memset(KADDR(pa),0,0x1000);//应使用内核虚拟地址
                           // (7) set page directory entry's permission
@@ -406,14 +405,17 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
      * DEFINEs:
      *   PTE_P           0x001                   // page table/directory entry flags bit : Present
      */
-    pde_t *pdep=pgdir+PDX(la);
-    if ((*pdep)&PTE_P) {                      //(1) check if this page table entry is present
-        pte_t* ptep=(pte_t*)((*pdep)&~0xfff)+PTX(la); //(2) find corresponding page to pte
+    //pde_t *pdep = pgdir+PDX(la);   //(1) find page directory entry//找到相应页目录项地址
+    //ptep=(pte_t*)((*pdep)&~0xfff)+PTX(la); //(2) find corresponding page to pte
+    //参数给出的ptep=ptep+KERNBASE;
+    if ((*ptep)&PTE_P) {                      //(1) check if this page table entry is present
+       // pte_t* ptep=(pte_t*)((*pdep)&~0xfff)+PTX(la); //(2) find corresponding page to pte
         //struct Page* page=(struct Page*)((*ptet)&~0xfff);
-        struct Page* page=pte2page(ptep);
-        page_ref_dec(page);                         //(3) decrease page reference
-        free_page(page);                          //(4) and free this page when page reference reachs 0
-        *ptep=0x000000000;                          //(5) clear second page table entry
+        struct Page* page=pte2page(*ptep);//一开始写成ptep了，我的
+        if(page_ref_dec(page)==0){            //ref-1并返回当前的ref值，如果ref值减为0的话，就直接free               //(3) decrease page reference
+               free_page(page);
+        }                          //(4) and free this page when page reference reachs 0
+        *ptep=0x00000000;                          //(5) clear second page table entry
         tlb_invalidate(pgdir,la);                          //(6) flush tlb
     }
 }
@@ -473,16 +475,13 @@ check_alloc_page(void) {
 
 static void
 check_pgdir(void) {
-    cprintf("6\n");
     assert(npage <= KMEMSIZE / PGSIZE);
     assert(boot_pgdir != NULL && (uint32_t)PGOFF(boot_pgdir) == 0);
     assert(get_page(boot_pgdir, 0x0, NULL) == NULL);
 
-cprintf("7\n");
     struct Page *p1, *p2;
     p1 = alloc_page();
     assert(page_insert(boot_pgdir, p1, 0x0, 0) == 0);
-cprintf("8\n");
     pte_t *ptep;
     assert((ptep = get_pte(boot_pgdir, 0x0, 0)) != NULL);
     assert(pte2page(*ptep) == p1);
