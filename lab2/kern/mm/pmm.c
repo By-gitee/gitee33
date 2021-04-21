@@ -326,6 +326,29 @@ pmm_init(void) {
 // return vaule: the kernel virtual address of this pte
 pte_t *
 get_pte(pde_t *pgdir, uintptr_t la, bool create) {
+     //find page directory entry
+     pde_t *pdep = pgdir + PDX(la);   
+     if (*pdep & PTE_P){
+     // if exist, return PTE
+         pte_t *ptep = (pte_t *)KADDR(*pdep & ~0x0fff) + PTX(la);
+         return ptep;
+     }
+     //if not exist,alloc page
+     struct Page*page;
+     if (!create || ((page = alloc_page()) == NULL)){
+         return NULL;
+     }
+     //set page reference
+     set_page_ref(page, 1);
+     //get linear addresses
+     uintptr_t pa = page2pa(page) & ~0x0fff;
+     //initialize new page table
+     memset((void *)KADDR(pa), 0, PGSIZE);
+     //set permissions
+     *pdep = pa| PTE_P |PTE_W | PTE_U;
+     //return page table address
+     pte_t *ptep = (pte_t *)KADDR(pa) + PTX(la);
+     return ptep;
     /* LAB2 EXERCISE 2: YOUR CODE
      *
      * If you need to visit a physical address, please use KADDR()
