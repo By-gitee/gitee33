@@ -212,7 +212,7 @@ page_init(void) {
 
     npage = maxpa / PGSIZE;
     pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
-
+    
     for (i = 0; i < npage; i ++) {
         SetPageReserved(pages + i);
     }
